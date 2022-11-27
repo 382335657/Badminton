@@ -1,0 +1,96 @@
+from selenium import webdriver
+import multiprocessing
+import time
+from PIL import Image
+import pytesseract
+
+"""
+site  |   time
+1       8:00-9:00
+2       9:00-10:00
+3       10:00-11:00
+4       11:00-12:00
+5       12:00-13:00
+6       13:00-14:00
+7       14:00-15:00
+8       15:00-16:00
+9       16:00-17:00
+10      17:00-18:00
+11      18:00-19:00
+12      19:00-20:00
+13      20:00-21:00
+14      21:00-22:30
+"""
+# 并行预约
+# 测试预约前两个场地
+# sites = [1, 2]
+# 最后三个场地
+sites = ['last()-1', 'last()', 'last()-2']
+date = '2021-09-13'
+
+saveCaptPath = r'C:\Users\captchaImg'
+
+username = '9999999999' # 学号
+password = 'xxxxxx' # 密码
+
+def order_site(site):
+    wd = webdriver.Chrome(r'C:\Users\chromedriver.exe')
+
+    wd.get(
+        'https://elife.fudan.edu.cn/public/front/getResource2.htm?contentId=8aecc6ce749544fd01749a31a04332c2&ordersId=&currentDate=' + date)
+
+    wd.find_element_by_class_name('xndl').click()
+
+    usernameElem = wd.find_element_by_id('username')
+    passwordElem = wd.find_element_by_id('password')
+
+    usernameElem.send_keys(username)
+    passwordElem.send_keys(password)
+    wd.find_element_by_id('idcheckloginbtn').click()
+
+    siteElems = wd.find_elements_by_xpath('//table[@class="site_table"]/tbody[' + str(site) + ']/tr/td[6]/img')
+    for siteElem in siteElems:
+        siteElem.click()
+
+    captImgPath = saveCaptPath + '\\' + date + '-' + str(site) + '.png'
+    captElems = wd.find_elements_by_xpath('//table[@class="txdd_table_2"]/tbody/tr[5]/td/img')
+    for captElem in captElems:
+        captElem.screenshot(captImgPath)
+
+    captImage = Image.open(captImgPath)
+    captText = pytesseract.image_to_string(captImage)
+
+    captchaTextElem = wd.find_element_by_class_name('login_input_2')
+    captchaTextElem.send_keys(captText)
+    wd.find_element_by_id('btn_sub').click()
+
+    try:
+        title = wd.title
+        assert title == u'个人订单'
+    except:
+        wd.refresh()
+        captElems = wd.find_elements_by_xpath('//table[@class="txdd_table_2"]/tbody/tr[5]/td/img')
+        for captElem in captElems:
+            captElem.screenshot(captImgPath)
+        captImage = Image.open(captImgPath)
+        captText = pytesseract.image_to_string(captImage)
+        time.sleep(1)
+        captchaTextElem = wd.find_element_by_class_name('login_input_2')
+        captchaTextElem.send_keys(captText)
+        wd.find_element_by_id('btn_sub').click()
+    finally:
+        wd.quit()
+
+if __name__ == '__main__':
+    start = time.time()
+    processList = []
+    for site in sites:
+        p = multiprocessing.Process(target=order_site, args=(site,))
+        processList.append(p)
+        p.start()
+
+    for i in processList:
+        i.join()
+    end = time.time()
+    print(end - start)
+
